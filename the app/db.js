@@ -191,6 +191,21 @@ const dbHelpers = {
         `).all(dateStr);
     },
 
+    deleteQueueByDate: (dateStr) => {
+        return db.prepare(`
+            DELETE FROM post_queue
+            WHERE COALESCE(posting_date, substr(scheduled_at, 1, 10)) = ?
+        `).run(dateStr);
+    },
+
+    deletePendingOrErrorQueueByDate: (dateStr) => {
+        return db.prepare(`
+            DELETE FROM post_queue
+            WHERE COALESCE(posting_date, substr(scheduled_at, 1, 10)) = ?
+              AND status IN ('pending', 'error')
+        `).run(dateStr);
+    },
+
     getQueueItem: (id) => {
         return db.prepare(`
             SELECT pq.*, COALESCE(pq.page_name, p.page_name) AS page_name

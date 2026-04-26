@@ -77,6 +77,15 @@ If `queue_id` is unavailable, n8n may use the stable identity:
 
 The database enforces one queue row per `batch_id + page_id + slot_number`. If the frontend retries the same batch, existing rows are reused and duplicate jobs are not created.
 
+## Queue Cleanup
+
+Queue Monitor has two date-scoped cleanup actions:
+
+- `DELETE /api/queue/test-pending?date=YYYY-MM-DD` deletes only `pending` and `error` rows for that date.
+- `DELETE /api/queue?date=YYYY-MM-DD` deletes all queue rows for that date.
+
+Both routes only delete from `post_queue`; pages, settings, uploads, and tokens are left untouched.
+
 ## Token Boundary
 
 Page access tokens stay in the backend database for n8n sync/update workflows. `GET /api/pages` returns page metadata only and does not expose access tokens to the frontend.

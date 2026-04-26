@@ -262,6 +262,8 @@
             <div style="display: flex; gap: 1rem;">
                 <input type="date" id="qm-date" onchange="loadQueueData()">
                 <button class="btn btn-outline" onclick="loadQueueData()">Refresh</button>
+                <button class="btn btn-outline" onclick="clearQueueForSelectedDate('pending')">Clear Pending/Error</button>
+                <button class="btn btn-outline" onclick="clearQueueForSelectedDate('all')">Clear Queue for Selected Date</button>
             </div>
         </div>
 
@@ -678,6 +680,32 @@
             showToast('Item set to pending');
             loadQueueData();
         } catch (e) { alert(e.message); }
+    }
+
+    async function clearQueueForSelectedDate(scope) {
+        const date = document.getElementById('qm-date').value;
+        if (!date) {
+            alert('Select a queue date first.');
+            return;
+        }
+
+        const isFullClear = scope === 'all';
+        const message = isFullClear
+            ? `Delete all queue rows for ${date}? This only clears queue rows, not pages, settings, tokens, or uploads.`
+            : `Delete pending/error queue rows for ${date}? Published rows will be kept.`;
+
+        if (!confirm(message)) return;
+
+        try {
+            const endpoint = isFullClear
+                ? `/api/queue?date=${encodeURIComponent(date)}`
+                : `/api/queue/test-pending?date=${encodeURIComponent(date)}`;
+            const result = await apiFetch(endpoint, { method: 'DELETE' });
+            showToast(`${result.deleted || 0} queue row${(result.deleted || 0) === 1 ? '' : 's'} deleted.`);
+            await loadQueueData();
+        } catch (e) {
+            alert(e.message);
+        }
     }
 
 </script>

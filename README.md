@@ -60,6 +60,15 @@ The `Respond: Jobs Accepted` node sends the response first, then `Load Validated
 
 n8n must not call `POST /api/queue`. It reports execution results to `POST /api/queue/status`.
 
+## Queue Cleanup
+
+The Queue Monitor includes cleanup tools for the selected date:
+
+- `Clear Pending/Error` calls `DELETE /api/queue/test-pending?date=YYYY-MM-DD` and removes only `pending` or `error` queue rows.
+- `Clear Queue for Selected Date` calls `DELETE /api/queue?date=YYYY-MM-DD` and removes all queue rows for that date.
+
+Cleanup only deletes rows from `post_queue`. It does not delete pages, settings, uploads, or tokens.
+
 ## n8n Cloud Starter Setup
 
 n8n Cloud Starter cannot use server environment variables or n8n Variables for this setup, so the publisher blueprint includes a workflow-local `Config` Set node.

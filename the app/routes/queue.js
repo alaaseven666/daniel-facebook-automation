@@ -78,6 +78,15 @@ function toN8nJob(row) {
     };
 }
 
+function getValidatedDate(req, res) {
+    const date = String(req.query.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        res.status(400).json({ error: 'Missing or invalid date. Use YYYY-MM-DD.' });
+        return null;
+    }
+    return date;
+}
+
 // GET /api/queue?date=YYYY-MM-DD
 router.get('/', (req, res) => {
     try {
@@ -86,6 +95,34 @@ router.get('/', (req, res) => {
         res.json(queueItems);
     } catch (error) {
         console.error('Error fetching queue:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE /api/queue/test-pending?date=YYYY-MM-DD
+router.delete('/test-pending', (req, res) => {
+    try {
+        const date = getValidatedDate(req, res);
+        if (!date) return;
+
+        const result = dbHelpers.deletePendingOrErrorQueueByDate(date);
+        res.json({ success: true, deleted: result.changes, date, scope: 'pending_or_error' });
+    } catch (error) {
+        console.error('Error deleting pending/error queue rows:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE /api/queue?date=YYYY-MM-DD
+router.delete('/', (req, res) => {
+    try {
+        const date = getValidatedDate(req, res);
+        if (!date) return;
+
+        const result = dbHelpers.deleteQueueByDate(date);
+        res.json({ success: true, deleted: result.changes, date, scope: 'all' });
+    } catch (error) {
+        console.error('Error deleting queue rows:', error);
         res.status(500).json({ error: error.message });
     }
 });
