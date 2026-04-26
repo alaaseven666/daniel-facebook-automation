@@ -138,6 +138,19 @@
     },
     {
       "parameters": {
+        "jsCode": "const validated = $('Validate Batch Contract').item.json;\nreturn [{ json: validated }];"
+      },
+      "id": "load-validated-batch-after-response",
+      "name": "Load Validated Batch After Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        120
+      ]
+    },
+    {
+      "parameters": {
         "batchSize": 1,
         "options": {}
       },
@@ -644,6 +657,17 @@
       ]
     },
     "Respond: Jobs Accepted": {
+      "main": [
+        [
+          {
+            "node": "Load Validated Batch After Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Validated Batch After Response": {
       "main": [
         [
           {

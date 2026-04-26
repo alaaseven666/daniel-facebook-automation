@@ -50,6 +50,14 @@ n8n responds immediately after validating the publisher webhook payload:
 
 After that response, the workflow continues asynchronously: it splits jobs, waits until `scheduled_time`, publishes, posts comments, and sends status updates to `/api/queue/status`.
 
+In the publisher workflow JSON, the `Webhook: App Jobs` node must use:
+
+```json
+"responseMode": "responseNode"
+```
+
+The `Respond: Jobs Accepted` node sends the response first, then `Load Validated Batch After Response` passes the validated payload into the async job-splitting path.
+
 n8n must not call `POST /api/queue`. It reports execution results to `POST /api/queue/status`.
 
 ## n8n Cloud Starter Setup
