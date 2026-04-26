@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facebook Pages Automation</title>
+    <style>
+        :root {
+            --bg-darkest: #020601;
+            --bg-dark: #0E1C26;
+            --accent: #6AE499;
+            --accent-hover: #55c880;
+            --text-main: #FFFFFF;
+            --text-muted: #8899AA;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --error: #FF4D4D;
+            --success: #6AE499;
+            --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-darkest);
+            color: var(--text-main);
+            font-family: var(--font-family);
+            line-height: 1.6;
+        }
+
+        /* Typography */
+        h1, h2, h3 { font-weight: 600; margin-bottom: 1rem; }
+        h1 { font-size: 2.5rem; color: var(--accent); }
+        h2 { font-size: 1.8rem; }
+        
+        /* Layout */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Navigation */
+        nav {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        .nav-btn {
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .nav-btn:hover { color: var(--text-main); }
+        .nav-btn.active {
+            color: var(--bg-darkest);
+            background-color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* Screens */
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.3s ease; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Cards & Forms */
+        .card {
+            background-color: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem;}
+        
+        input[type="text"], input[type="number"], input[type="date"], input[type="time"], select, textarea {
+            width: 100%;
+            padding: 0.8rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            border-radius: 4px;
+            font-family: var(--font-family);
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        textarea { resize: vertical; min-height: 80px; }
+
+        /* Buttons */
+        .btn {
+            background-color: var(--accent);
+            color: var(--bg-darkest);
+            border: none;
+            padding: 0.8rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover { background-color: var(--accent-hover); }
+        .btn-outline {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
+        .btn-outline:hover {
+            background: rgba(106, 228, 153, 0.1);
+        }
+        .btn-small { padding: 0.4rem 0.8rem; font-size: 0.9rem; }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        th { color: var(--text-muted); font-weight: 500; }
+        tr:hover { background-color: rgba(255, 255, 255, 0.02); }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .badge.success { background: rgba(106, 228, 153, 0.2); color: var(--success); }
+        .badge.error { background: rgba(255, 77, 77, 0.2); color: var(--error); }
+        .badge.pending { background: rgba(136, 153, 170, 0.2); color: var(--text-muted); }
+
+        /* Grid Layouts */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+
+        /* Slot specific */
+        .slot-card {
+            border-left: 4px solid var(--accent);
+        }
+        .slot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        /* Page Selector List */
+        .page-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 4px;
+            background: rgba(0,0,0,0.2);
+        }
+        .page-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .page-item input { width: auto; margin-right: 10px; }
+
+        /* Toast */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: var(--accent);
+            color: var(--bg-darkest);
+            text-align: center;
+            border-radius: 4px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            right: 30px;
+            top: 30px;
+            font-weight: bold;
+        }
+        #toast.show {
+            visibility: visible;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Optimizers Automation</h1>
+    
+    <nav>
+        <button class="nav-btn active" onclick="switchTab('queue-builder')">Queue Builder</button>
+        <button class="nav-btn" onclick="switchTab('queue-monitor')">Queue Monitor</button>
+        <button class="nav-btn" onclick="switchTab('page-manager')">Page Manager</button>
+        <button class="nav-btn" onclick="switchTab('settings')">Settings</button>
+    </nav>
+
+    <!-- SCREEN 1: Queue Builder -->
+    <section id="queue-builder" class="screen active">
+        <h2>Daily Post Queue Builder</h2>
+        
+        <div class="card grid-2">
+            <div class="form-group">
+                <label>Posting Date</label>
+                <input type="date" id="qb-date">
+            </div>
+            <div class="form-group">
+                <label>First Post Time</label>
+                <input type="time" id="qb-time" value="15:00" onchange="updateSlotTimes()">
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Target Pages</h3>
+            <div class="form-group">
+                <button class="btn btn-outline btn-small" onclick="selectAllPages(true)" style="margin-bottom: 10px;">Select All</button>
+                <button class="btn btn-outline btn-small" onclick="selectAllPages(false)" style="margin-bottom: 10px;">Deselect All</button>
+                <div class="page-list" id="qb-page-list">
+                    <!-- Checkboxes injected by JS -->
+                </div>
+            </div>
+        </div>
+
+        <form id="queue-form">
+            <!-- 6 Slots injected by JS -->
+            <div id="slots-container"></div>
+            
+            <button type="submit" class="btn" style="width: 100%; margin-top: 1rem; padding: 1rem; font-size: 1.2rem;">Submit Daily Queue to n8n</button>
+        </form>
+    </section>
+
+    <!-- SCREEN 2: Queue Monitor -->
+    <section id="queue-monitor" class="screen">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2>Queue Monitor</h2>
+            <div style="display: flex; gap: 1rem;">
+                <input type="date" id="qm-date" onchange="loadQueueData()">
+                <button class="btn btn-outline" onclick="loadQueueData()">Refresh</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Page Name</th>
+                        <th>Slot</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th>FB Post ID</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="qm-table-body">
+                    <!-- Rows injected by JS -->
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- SCREEN 3: Page Manager -->
+    <section id="page-manager" class="screen">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2>Page Manager</h2>
+            <div style="display: flex; gap: 1rem;">
+                <button class="btn" onclick="syncPages()">Sync from Meta</button>
+                <button class="btn btn-outline" onclick="refreshTokens()">Refresh All Tokens</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Page Name</th>
+                        <th>Page ID</th>
+                        <th>Token Status</th>
+                        <th>Expires At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="pm-table-body">
+                    <!-- Rows injected by JS -->
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- SCREEN 4: Settings -->
+    <section id="settings" class="screen">
+        <h2>System Settings</h2>
+        <div class="card">
+            <form id="settings-form">
+                <div class="form-group">
+                    <label>n8n Webhook URL (For Queue Payload)</label>
+                    <input type="url" id="set-webhook-url" required>
+                </div>
+                <div class="form-group">
+                    <label>n8n Status Callback URL</label>
+                    <input type="url" id="set-callback-url">
+                </div>
+                <div class="form-group">
+                    <label>Public Media Base URL (e.g., ngrok URL)</label>
+                    <input type="url" id="set-media-url" required>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Default First Post Time</label>
+                        <input type="time" id="set-first-time">
+                    </div>
+                    <div class="form-group">
+                        <label>Default Comment Delay (Seconds)</label>
+                        <input type="number" id="set-comment-delay">
+                    </div>
+                </div>
+                <button type="submit" class="btn">Save Settings</button>
+            </form>
+        </div>
+    </section>
+</div>
+
+<div id="toast">Message</div>
+
+<script>
+    // --- Global State ---
+    let appSettings = {};
+    let appPages = [];
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Set default date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('qb-date').value = today;
+        document.getElementById('qm-date').value = today;
+
+        await loadSettings();
+        await loadPages();
+        buildQueueSlots();
+        updateSlotTimes();
+        
+        // Start monitor auto-refresh if on that tab
+        setInterval(() => {
+            if (document.getElementById('queue-monitor').classList.contains('active')) {
+                loadQueueData();
+            }
+        }, 10000);
+    });
+
+    // --- Navigation ---
+    function switchTab(tabId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        
+        document.getElementById(tabId).classList.add('active');
+        event.target.classList.add('active');
+
+        if (tabId === 'queue-monitor') loadQueueData();
+    }
+
+    function showToast(msg) {
+        const toast = document.getElementById("toast");
+        toast.innerText = msg;
+        toast.className = "show";
+        setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+    }
+
+    // --- API Helpers ---
+    async function apiFetch(url, options = {}) {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    }
+
+    // --- Settings ---
+    async function loadSettings() {
+        try {
+            appSettings = await apiFetch('/api/settings');
+            document.getElementById('set-webhook-url').value = appSettings.n8n_webhook_url || '';
+            document.getElementById('set-callback-url').value = appSettings.n8n_status_callback_url || '';
+            document.getElementById('set-media-url').value = appSettings.public_media_base_url || '';
+            document.getElementById('set-first-time').value = appSettings.default_first_post_time || '15:00';
+            document.getElementById('set-comment-delay').value = appSettings.default_comment_delay || '60';
+            
+            if(appSettings.default_first_post_time) {
+                document.getElementById('qb-time').value = appSettings.default_first_post_time;
+            }
+        } catch (e) { console.error('Failed to load settings', e); }
+    }
+
+    document.getElementById('settings-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            n8n_webhook_url: document.getElementById('set-webhook-url').value,
+            n8n_status_callback_url: document.getElementById('set-callback-url').value,
+            public_media_base_url: document.getElementById('set-media-url').value,
+            default_first_post_time: document.getElementById('set-first-time').value,
+            default_comment_delay: document.getElementById('set-comment-delay').value,
+        };
+        try {
+            await apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            showToast('Settings Saved!');
+            appSettings = payload;
+        } catch (e) { alert('Error: ' + e.message); }
+    });
+
+    // --- Pages ---
+    async function loadPages() {
+        try {
+            appPages = await apiFetch('/api/pages');
+            
+            // Populate Page Manager Table
+            const pmBody = document.getElementById('pm-table-body');
+            pmBody.innerHTML = '';
+            
+            // Populate Queue Builder Checkboxes
+            const qbList = document.getElementById('qb-page-list');
+            qbList.innerHTML = '';
+
+            appPages.forEach(p => {
+                // Table
+                const tr = document.createElement('tr');
+                const isTokenValid = true; // In a real app, check token_expires_at against Date.now()
+                const badgeClass = isTokenValid ? 'success' : 'error';
+                tr.innerHTML = `
+                    <td>${p.page_name}</td>
+                    <td>${p.page_id}</td>
+                    <td><span class="badge ${badgeClass}">${isTokenValid ? 'Valid' : 'Expired'}</span></td>
+                    <td>${p.token_expires_at || 'Never'}</td>
+                    <td><button class="btn btn-outline btn-small" onclick="alert('Inline edit token stub')">Edit</button></td>
+                `;
+                pmBody.appendChild(tr);
+
+                // Checkbox
+                const div = document.createElement('div');
+                div.className = 'page-item';
+                div.innerHTML = `
+                    <input type="checkbox" id="cb-${p.page_id}" value="${p.page_id}" checked>
+                    <label for="cb-${p.page_id}" style="margin:0;">${p.page_name}</label>
+                `;
+                qbList.appendChild(div);
+            });
+        } catch (e) { console.error('Failed to load pages', e); }
+    }
+
+    function selectAllPages(check) {
+        document.querySelectorAll('#qb-page-list input[type="checkbox"]').forEach(cb => cb.checked = check);
+    }
+
+    function syncPages() {
+        apiFetch('/api/pages/sync', { method: 'POST' })
+            .then(res => showToast(res.message))
+            .catch(e => alert(e.message));
+    }
+    
+    function refreshTokens() {
+        showToast('Refresh workflow triggered (stub)');
+    }
+
+    // --- Queue Builder ---
+    function buildQueueSlots() {
+        const container = document.getElementById('slots-container');
+        container.innerHTML = '';
+        const delay = appSettings.default_comment_delay || 60;
+
+        for (let i = 1; i <= 6; i++) {
+            const slotHtml = `
+                <div class="card slot-card" id="slot-${i}">
+                    <div class="slot-header">
+                        <h3>Slot ${i}</h3>
+                        <span class="badge pending" id="time-badge-${i}">00:00</span>
+                    </div>
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label>Content Type</label>
+                            <select id="type-${i}">
+                                <option value="photo">Photo</option>
+                                <option value="reel">Reel</option>
+                                <option value="story">Story</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Media File</label>
+                            <input type="file" id="file-${i}" accept="image/jpeg, image/png, video/mp4, video/quicktime" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Comment Delay (sec)</label>
+                            <input type="number" id="delay-${i}" value="${delay}">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Caption</label>
+                        <textarea id="caption-${i}" placeholder="Write caption here..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>First Comment (Link)</label>
+                        <input type="text" id="comment-${i}" placeholder="https://partner.com/...">
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', slotHtml);
+        }
+    }
+
+    function updateSlotTimes() {
+        const timeInput = document.getElementById('qb-time').value;
+        if (!timeInput) return;
+        
+        let [hours, minutes] = timeInput.split(':').map(Number);
+        
+        for (let i = 1; i <= 6; i++) {
+            const d = new Date();
+            d.setHours(hours + (i - 1), minutes, 0);
+            const timeStr = d.toTimeString().substring(0,5);
+            document.getElementById(`time-badge-${i}`).innerText = timeStr;
+            document.getElementById(`slot-${i}`).dataset.time = timeStr;
+        }
+    }
+
+    document.getElementById('queue-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        // 1. Get selected pages
+        const selectedPageIds = Array.from(document.querySelectorAll('#qb-page-list input:checked')).map(cb => cb.value);
+        if (selectedPageIds.length === 0) return alert('Select at least one page.');
+
+        const pageObjs = selectedPageIds.map(id => {
+            const p = appPages.find(page => page.page_id === id);
+            return { page_id: p.page_id, access_token: p.access_token };
+        });
+
+        const date = document.getElementById('qb-date').value;
+        const posts = [];
+
+        try {
+            // 2. Upload files and build payload
+            showToast('Uploading media...');
+            
+            for (let i = 1; i <= 6; i++) {
+                const fileInput = document.getElementById(`file-${i}`);
+                if (!fileInput.files[0]) throw new Error(`Missing file for Slot ${i}`);
+
+                const formData = new FormData();
+                formData.append('media_file', fileInput.files[0]);
+
+                const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+                if (!uploadRes.ok) throw new Error(`Upload failed for Slot ${i}`);
+                const { url } = await uploadRes.json();
+
+                const timeStr = document.getElementById(`slot-${i}`).dataset.time;
+                const scheduledDateTime = `${date}T${timeStr}:00+00:00`; // Adjust timezone in production
+
+                posts.push({
+                    slot: i,
+                    content_type: document.getElementById(`type-${i}`).value,
+                    scheduled_time: scheduledDateTime,
+                    media_url: url,
+                    caption: document.getElementById(`caption-${i}`).value,
+                    first_comment: document.getElementById(`comment-${i}`).value,
+                    comment_delay_seconds: parseInt(document.getElementById(`delay-${i}`).value),
+                    pages: pageObjs
+                });
+            }
+
+            const payload = {
+                batch_id: `B-${Date.now()}`,
+                posting_date: date,
+                posts: posts,
+                stories: [] // Implement stories logic separately if needed
+            };
+
+            // 3. Submit to Queue API
+            showToast('Submitting queue...');
+            await apiFetch('/api/queue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            showToast('Queue Submitted Successfully!');
+            document.getElementById('queue-form').reset();
+            switchTab('queue-monitor');
+
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+
+    // --- Queue Monitor ---
+    async function loadQueueData() {
+        const date = document.getElementById('qm-date').value;
+        try {
+            const data = await apiFetch(`/api/queue?date=${date}`);
+            const tbody = document.getElementById('qm-table-body');
+            tbody.innerHTML = '';
+
+            data.forEach(row => {
+                let statusBadge = 'pending';
+                if (row.status === 'error') statusBadge = 'error';
+                else if (row.status === 'published') statusBadge = 'success';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.page_name}</td>
+                    <td>${row.slot_number} (${row.content_type})</td>
+                    <td>${row.scheduled_at.split('T')[1].substring(0,5)}</td>
+                    <td>
+                        <span class="badge ${statusBadge}">${row.status}</span>
+                        ${row.status==='error' ? `<br><small style="color:var(--error)">${row.error_message}</small>` : ''}
+                    </td>
+                    <td>${row.fb_post_id || '-'}</td>
+                    <td>
+                        ${row.status === 'error' ? `<button class="btn btn-outline btn-small" onclick="retryItem(${row.id})">Retry</button>` : '-'}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) { console.error('Failed to load queue', e); }
+    }
+
+    async function retryItem(id) {
+        try {
+            await apiFetch('/api/queue/retry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ queue_id: id })
+            });
+            showToast('Item set to pending');
+            loadQueueData();
+        } catch (e) { alert(e.message); }
+    }
+
+</script>
+</body>
+</html>

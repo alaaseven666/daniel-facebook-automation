@@ -1,0 +1,105 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fb-sync-pages",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "p1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v25.0/me/accounts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "limit", "value": "50" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "p2",
+      "name": "Fetch All Pages from Meta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst pages = response.data;\n\nif (!pages || pages.length === 0) {\n  throw new Error('Meta API returned no pages. Check System User token and asset assignments.');\n}\n\nreturn pages.map(page => ({\n  json: {\n    page_id: page.id,\n    page_name: page.name,\n    access_token: page.access_token,\n  }\n}));"
+      },
+      "id": "p3",
+      "name": "Extract Pages Array",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "p4",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/pages",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "page_id", "value": "={{ $json.page_id }}" },
+            { "name": "page_name", "value": "={{ $json.page_name }}" },
+            { "name": "access_token", "value": "={{ $json.access_token }}" },
+            { "name": "active", "value": "1" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "p5",
+      "name": "Upsert Each Page in Local App",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"synced\": \"{{ $('Extract Pages Array').all().length }} pages\"\n}",
+        "options": {}
+      },
+      "id": "p6",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [880, 200]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [ [ { "node": "Fetch All Pages from Meta", "type": "main", "index": 0 } ] ]
+    },
+    "Fetch All Pages from Meta": {
+      "main": [ [ { "node": "Extract Pages Array", "type": "main", "index": 0 } ] ]
+    },
+    "Extract Pages Array": {
+      "main": [ [ { "node": "Split In Batches", "type": "main", "index": 0 }, { "node": "Respond to Webhook", "type": "main", "index": 0 } ] ]
+    },
+    "Split In Batches": {
+      "main": [ [ { "node": "Upsert Each Page in Local App", "type": "main", "index": 0 } ] ]
+    },
+    "Upsert Each Page in Local App": {
+      "main": [ [ { "node": "Split In Batches", "type": "main", "index": 0 } ] ]
+    }
+  }
+}

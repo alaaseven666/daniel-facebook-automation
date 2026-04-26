@@ -1,0 +1,213 @@
+{
+  "name": "Page Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fb-sync-pages",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a24553de-d1e9-4388-8523-cce4ea2200ba",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -176
+      ],
+      "webhookId": "af467d32-201b-495c-8555-98e6c1279ac1"
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v25.0/me/accounts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "37d470ec-9a41-4858-a7f2-a749cfa016ab",
+      "name": "Fetch All Pages from Meta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        896,
+        -176
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "R4tINO3TUk9HsmPP",
+          "name": "Meta API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst pages = response.data;\n\nif (!pages || pages.length === 0) {\n  throw new Error('Meta API returned no pages. Check System User token and asset assignments.');\n}\n\nreturn pages.map(page => ({\n  json: {\n    page_id: page.id,\n    page_name: page.name,\n    access_token: page.access_token,\n  }\n}));"
+      },
+      "id": "66e9911a-75c7-4f3e-9703-a586db5f5bc8",
+      "name": "Extract Pages Array",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "78e63822-ed5c-434e-a60c-6ce3b3638051",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://stride-plaything-wasabi.ngrok-free.dev/api/pages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "page_id",
+              "value": "={{ $json.page_id }}"
+            },
+            {
+              "name": "page_name",
+              "value": "={{ $json.page_name }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $json.access_token }}"
+            },
+            {
+              "name": "active",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d8682093-da77-4e48-b8a8-7a775932a368",
+      "name": "Upsert Each Page in Local App",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1552,
+        -176
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "L1ludV2RSLyhJISr",
+          "name": "Local App API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"synced\": \"{{ $('Extract Pages Array').all().length }} pages\"\n}",
+        "options": {}
+      },
+      "id": "fe109b5e-91ad-4c1e-845d-42513dd22df5",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        32
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch All Pages from Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Pages from Meta": {
+      "main": [
+        [
+          {
+            "node": "Extract Pages Array",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Pages Array": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Upsert Each Page in Local App",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Each Page in Local App": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "e179d046-2be9-4c92-b08d-c4ae3268501d",
+  "meta": {
+    "instanceId": "5b782ab6f6f5bd6f3de9d9c2afbe34bd8276ba925ee23797bfdbc66d5610d446"
+  },
+  "id": "vWIpE7aUf9WyyLz6",
+  "tags": []
+}

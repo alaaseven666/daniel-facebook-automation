@@ -1,0 +1,120 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fb-ingest",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\n\nif (!body.batch_id) throw new Error('Missing batch_id');\nif (!body.posting_date) throw new Error('Missing posting_date');\nif (!Array.isArray(body.posts) || body.posts.length !== 6) {\n  throw new Error(`Expected 6 posts, got ${body.posts?.length ?? 0}`);\n}\n\nfor (const post of body.posts) {\n  if (!post.slot) throw new Error(`Post missing slot number`);\n  if (!post.media_url) throw new Error(`Slot ${post.slot}: missing media_url`);\n  if (!post.caption) throw new Error(`Slot ${post.slot}: missing caption`);\n  if (!post.first_comment) throw new Error(`Slot ${post.slot}: missing first_comment`);\n  if (!Array.isArray(post.pages) || post.pages.length === 0) {\n    throw new Error(`Slot ${post.slot}: pages array is empty`);\n  }\n}\n\nreturn $input.all();"
+      },
+      "id": "e2",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const workflowStaticData = $getWorkflowStaticData('global');\nconst body = $input.first().json;\n\nif (!workflowStaticData.queue) {\n  workflowStaticData.queue = {};\n}\n\nworkflowStaticData.queue[body.batch_id] = {\n  batch_id: body.batch_id,\n  posting_date: body.posting_date,\n  posts: body.posts,\n  stories: body.stories || [],\n  ingested_at: new Date().toISOString(),\n  status: 'pending'\n};\n\nconst totalRows = body.posts.reduce((sum, p) => sum + p.pages.length, 0);\n\nreturn [{ json: { success: true, batch_id: body.batch_id, queued: totalRows } }];"
+      },
+      "id": "e3",
+      "name": "Store Batch in Static Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/queue",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "source", "value": "n8n" },
+            { "name": "batch_id", "value": "={{ $('Store Batch in Static Data').item.json.batch_id }}" },
+            { "name": "queued", "value": "={{ $('Store Batch in Static Data').item.json.queued }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e4",
+      "name": "Forward to Local App DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, -100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"batch_id\": \"{{ $('Store Batch in Static Data').item.json.batch_id }}\",\n  \"queued\": \"{{ $('Store Batch in Static Data').item.json.queued }}\",\n  \"message\": \"Batch accepted. Publisher will run on schedule.\"\n}",
+        "options": {}
+      },
+      "id": "e5",
+      "name": "Respond to Webhook (Success)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [880, -100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseStatusCode": 400,
+        "responseBody": "={\n  \"success\": false,\n  \"error\": \"{{ $input.first().json.error.message }}\"\n}",
+        "options": {}
+      },
+      "id": "e6",
+      "name": "Respond to Webhook (Error)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [440, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "e7",
+      "name": "Check Validation Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [330, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [ [ { "node": "Validate Input", "type": "main", "index": 0 } ] ]
+    },
+    "Validate Input": {
+      "main": [ [ { "node": "Check Validation Error", "type": "main", "index": 0 } ] ]
+    },
+    "Check Validation Error": {
+      "main": [
+        [ { "node": "Respond to Webhook (Error)", "type": "main", "index": 0 } ],
+        [ { "node": "Store Batch in Static Data", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Store Batch in Static Data": {
+      "main": [ [ { "node": "Forward to Local App DB", "type": "main", "index": 0 } ] ]
+    },
+    "Forward to Local App DB": {
+      "main": [ [ { "node": "Respond to Webhook (Success)", "type": "main", "index": 0 } ] ]
+    }
+  }
+}

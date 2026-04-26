@@ -1,0 +1,422 @@
+{
+  "name": "the publisher",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const hour = new Date().getHours();\n\nconst slotMap = {\n  14: 1,\n  15: 2,\n  16: 3,\n  17: 4,\n  18: 5,\n  19: 6,\n};\n\nconst slotNumber = slotMap[hour] || 1; // Default to 1 for testing if triggered manually\n\nconst today = new Date();\ntoday.setHours(hour + 1, 0, 0, 0);\nconst scheduledUnixTime = Math.floor(today.getTime() / 1000);\n\nreturn [{ json: { slot_number: slotNumber, scheduled_unix_time: scheduledUnixTime } }];"
+      },
+      "id": "e9908a73-84d2-4481-8eac-ac01c8aba770",
+      "name": "Determine Current Slot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1136,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://stride-plaything-wasabi.ngrok-free.dev/api/queue",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "slot",
+              "value": "={{ $json.slot_number }}"
+            },
+            {
+              "name": "status",
+              "value": "pending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "66293f11-0877-4fe3-9410-3d7cbd6ce283",
+      "name": "Fetch Pending Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -928,
+        208
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mfn98s0Q0kBOsrFe",
+          "name": "Webhook Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.length > 0 }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "9d644388-468f-4264-8d62-5c2920e10939",
+      "name": "Check Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "27cfbaa9-4c38-4847-8976-120af65e3fbf",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.content_type }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "photo"
+            },
+            {
+              "value2": "reel",
+              "output": 1
+            },
+            {
+              "value2": "story",
+              "output": 2
+            }
+          ]
+        }
+      },
+      "id": "e4a0cd3c-a06d-47a5-bdc1-9aa6cf063f6a",
+      "name": "Route by Content Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v25.0/{{ $json.page_id }}/photos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.media_url }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.caption }}"
+            },
+            {
+              "name": "published",
+              "value": "false"
+            },
+            {
+              "name": "scheduled_publish_time",
+              "value": "={{ $('Determine Current Slot').item.json.scheduled_unix_time }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a5b73582-91a4-41af-adcd-5ee233217247",
+      "name": "Upload Photo to Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "R4tINO3TUk9HsmPP",
+          "name": "Meta API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://stride-plaything-wasabi.ngrok-free.dev/api/queue/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "queue_id",
+              "value": "={{ $('Split In Batches').item.json.id }}"
+            },
+            {
+              "name": "status",
+              "value": "published"
+            },
+            {
+              "name": "fb_post_id",
+              "value": "={{ $json.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b3718109-d264-4fb3-84ef-925e26bc33cb",
+      "name": "Notify App: Published",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://neamatalla.app.n8n.cloud/webhook/fb-comment",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "post_id",
+              "value": "={{ $('Upload Photo to Page').item.json.id }}"
+            },
+            {
+              "name": "page_id",
+              "value": "={{ $('Split In Batches').item.json.page_id }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $('Split In Batches').item.json.access_token }}"
+            },
+            {
+              "name": "comment_text",
+              "value": "={{ $('Split In Batches').item.json.first_comment }}"
+            },
+            {
+              "name": "delay_seconds",
+              "value": "={{ $('Split In Batches').item.json.comment_delay_seconds }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "616aeaee-42e5-4f59-b938-98571bb684ff",
+      "name": "Trigger Commenter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "a23bc7f0-80a8-45d1-b7e9-b393a2d90b24",
+      "name": "Inter-Page Delay",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "webhookId": "13b5ed73-444b-4b17-acf0-ebf9784dbace"
+    },
+    {
+      "parameters": {
+        "content": "## Reel Logic Placeholder\nWill build this out once Photo test is successful."
+      },
+      "id": "078711f5-0e8f-4752-bbb6-a787e573b703",
+      "name": "Reel Branch",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Story Logic Placeholder\nWill build this out once Photo test is successful."
+      },
+      "id": "6fd6c84f-77bf-4416-a205-82084b8a22fd",
+      "name": "Story Branch",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "55 14 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a02e16e6-0a42-45b6-8048-8f16b045f173",
+      "name": "Trigger 15:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1360,
+        208
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Determine Current Slot": {
+      "main": [
+        [
+          {
+            "node": "Fetch Pending Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Pending Posts": {
+      "main": [
+        [
+          {
+            "node": "Check Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Empty": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Route by Content Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Content Type": {
+      "main": [
+        [
+          {
+            "node": "Upload Photo to Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Photo to Page": {
+      "main": [
+        [
+          {
+            "node": "Notify App: Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify App: Published": {
+      "main": [
+        [
+          {
+            "node": "Trigger Commenter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Commenter": {
+      "main": [
+        [
+          {
+            "node": "Inter-Page Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inter-Page Delay": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger 15:00": {
+      "main": [
+        [
+          {
+            "node": "Determine Current Slot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "88ae1c7e-0a24-4730-8918-3104a6a1225f",
+  "meta": {
+    "instanceId": "5b782ab6f6f5bd6f3de9d9c2afbe34bd8276ba925ee23797bfdbc66d5610d446"
+  },
+  "id": "cSw8HvCj1fY291yb",
+  "tags": []
+}

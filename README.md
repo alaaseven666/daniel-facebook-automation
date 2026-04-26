@@ -1,1 +1,1 @@
-# daniel-facebook-automation
+# facebook-automation
