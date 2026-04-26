@@ -206,7 +206,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v25.0/{{ $('Split In Batches').item.json.page_id }}/photos",
+        "url": "=https://graph.facebook.com/v25.0/{{ $json.page_id }}/photos",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -221,7 +221,7 @@
             {
               "parameterType": "formData",
               "name": "caption",
-              "value": "={{ $('Split In Batches').item.json.caption }}"
+              "value": "={{ $json.caption }}"
             }
           ]
         },
@@ -232,8 +232,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1000,
-        -160
+        1440,
+        -120
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -258,8 +258,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        1220,
-        -160
+        1660,
+        -120
       ]
     },
     {
@@ -327,7 +327,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1440,
+        1880,
         -120
       ]
     },
@@ -347,7 +347,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        1660,
+        2100,
         -120
       ]
     },
@@ -361,7 +361,7 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
       "position": [
-        1880,
+        2320,
         -220
       ],
       "webhookId": "wait-comment-delay"
@@ -388,7 +388,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        2100,
+        2540,
         -220
       ],
       "credentials": {
@@ -414,7 +414,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        2320,
+        2760,
         -220
       ]
     },
@@ -446,7 +446,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        2540,
+        2980,
         -340
       ],
       "continueOnFail": true
@@ -479,7 +479,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        2540,
+        2980,
         -160
       ]
     },
@@ -539,7 +539,7 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
       "position": [
-        2760,
+        3200,
         -40
       ],
       "webhookId": "inter-page-delay"
@@ -600,6 +600,40 @@
         -160
       ],
       "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst media = item.binary?.media_file;\n\nif (!media) {\n  throw new Error('Download Media did not produce binary.media_file. Check job.media_url and ngrok access.');\n}\n\nconst mimeType = media.mimeType || '';\nif (!mimeType.startsWith('image/')) {\n  throw new Error(`Downloaded media_file is not an image. mimeType=${mimeType || 'missing'}`);\n}\n\nif (media.fileSize === undefined || media.fileSize === null || media.fileSize === '') {\n  throw new Error('Downloaded media_file is missing fileSize metadata.');\n}\n\nreturn [{ json: item.json, binary: item.binary }];"
+      },
+      "id": "verify-downloaded-media",
+      "name": "Verify Downloaded Media",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        -160
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-download-error",
+      "name": "Check Download Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        -160
+      ]
     }
   ],
   "pinData": {},
@@ -894,6 +928,35 @@
     },
     "Download Media": {
       "main": [
+        [
+          {
+            "node": "Verify Downloaded Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Downloaded Media": {
+      "main": [
+        [
+          {
+            "node": "Check Download Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Download Error": {
+      "main": [
+        [
+          {
+            "node": "Notify App: Publish Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Publish Photo",

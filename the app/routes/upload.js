@@ -3,12 +3,33 @@ const router = express.Router();
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const fs = require('fs');
 const { dbHelpers } = require('../db');
+
+const mediaDir = path.join(__dirname, '..', 'media');
+if (!fs.existsSync(mediaDir)) {
+    fs.mkdirSync(mediaDir, { recursive: true });
+}
+
+function getRequestBaseUrl(req) {
+    return `${req.protocol}://${req.get('host')}`;
+}
+
+function normalizePublicBaseUrl(value, req) {
+    const configured = String(value || '').trim();
+    const rawBaseUrl = configured || getRequestBaseUrl(req);
+    return rawBaseUrl.replace(/\/+$/, '').replace(/\/media$/i, '');
+}
+
+function buildPublicMediaUrl(filename, req) {
+    const baseUrl = normalizePublicBaseUrl(dbHelpers.getSetting('public_media_base_url'), req);
+    return `${baseUrl}/media/${encodeURIComponent(filename)}`;
+}
 
 // Setup multer storage
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, './media/');
+        cb(null, mediaDir);
     },
     filename: function (req, file, cb) {
         const ext = path.extname(file.originalname).toLowerCase();
@@ -41,12 +62,10 @@ router.post('/', upload.single('media_file'), (req, res) => {
             return res.status(400).json({ error: 'No file uploaded or invalid file format' });
         }
 
-        const baseUrl = dbHelpers.getSetting('public_media_base_url');
-        // Ensure there's no trailing slash on baseUrl, and append filename
-        const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-        const publicUrl = `${cleanBaseUrl}/${req.file.filename}`;
+        const publicUrl = buildPublicMediaUrl(req.file.filename, req);
+        console.log(`Uploaded media is publicly available at: ${publicUrl}`);
 
-        res.json({ url: publicUrl });
+        res.json({ url: publicUrl, filename: req.file.filename });
     } catch (error) {
         console.error('Upload Error:', error);
         res.status(500).json({ error: error.message });

@@ -10,6 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- Middleware ---
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public')); // Serve frontend
@@ -62,7 +63,7 @@ app.listen(PORT, () => {
     const defaults = {
         'n8n_webhook_url': '',
         'n8n_status_callback_url': '',
-        'public_media_base_url': `http://localhost:${PORT}/media`,
+        'public_media_base_url': `http://localhost:${PORT}`,
         'default_comment_delay': '60',
         'default_first_post_time': '15:00',
         'default_timezone': process.env.DEFAULT_TIMEZONE || 'Africa/Cairo'

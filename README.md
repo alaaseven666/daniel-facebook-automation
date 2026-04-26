@@ -60,6 +60,24 @@ The `Respond: Jobs Accepted` node sends the response first, then `Load Validated
 
 n8n must not call `POST /api/queue`. It reports execution results to `POST /api/queue/status`.
 
+## Media URLs
+
+Uploaded files are saved in `the app/media` and served publicly by Express at `/media/<filename>`.
+
+Set `public_media_base_url` / `Public App Base URL` to the public origin of the app, for example:
+
+```text
+https://your-ngrok-domain.ngrok-free.app
+```
+
+The app sends media URLs to n8n as:
+
+```text
+<public_base_url>/media/<filename>
+```
+
+To test, open a generated `media_url` in a browser. It should display or download the raw image file and return an image content type such as `image/jpeg` or `image/png`, not the app HTML page.
+
 ## Queue Cleanup
 
 The Queue Monitor includes cleanup tools for the selected date:
@@ -91,7 +109,15 @@ Do not put page access tokens in the frontend payload or in workflow JSON.
 
 The Page Sync blueprint also uses `REPLACE_WITH_PUBLIC_APP_URL/api/pages`; replace that placeholder before testing page sync.
 
-For local/ngrok testing, the publisher workflow downloads `job.media_url` in n8n first and uploads the binary file to Meta. This avoids relying on Meta fetching ngrok-hosted media URLs directly. The `Download Media` node sends `ngrok-skip-browser-warning: true` and stores the file as binary property `media_file`; `Publish Photo` sends that binary as multipart `source`.
+For local/ngrok testing, the publisher workflow downloads `job.media_url` in n8n first and uploads the binary file to Meta. This avoids relying on Meta fetching ngrok-hosted media URLs directly.
+
+Exact photo upload settings in the n8n publisher blueprint:
+
+- `Download Media`: HTTP Request `GET` to `={{ $json.media_url }}`, response format `File`, binary property `media_file`, header `ngrok-skip-browser-warning: true`.
+- `Verify Downloaded Media`: checks `binary.media_file`, requires `mimeType` starting with `image/`, and requires `fileSize`.
+- `Publish Photo`: HTTP Request `POST` to `https://graph.facebook.com/v25.0/{{ $json.page_id }}/photos`, body content type `multipart/form-data`.
+- `Publish Photo` body fields: binary form field `source` from input data field `media_file`, and text form field `caption` from `={{ $json.caption }}`.
+- `Publish Photo` must not send `url` or a text `source` value.
 
 ## Future Multi-Page Token Lookup
 

@@ -8,6 +8,22 @@ The frontend submits batches to `POST /api/queue`. The app stores one queue row 
 
 A batch may contain 1 to 6 posts. The UI always displays six possible slots, but empty slots are ignored. `slot_number` remains the visible slot number, so filling only Slot 2 and Slot 4 sends jobs with `slot_number` 2 and 4.
 
+## Media Serving
+
+Uploaded files are saved in `media/` and served by Express at `/media/<filename>`:
+
+```js
+app.use('/media', express.static(path.join(__dirname, 'media')));
+```
+
+`public_media_base_url` should be the public app origin, such as `https://your-ngrok-domain.ngrok-free.app`. The upload API returns:
+
+```text
+<public_media_base_url>/media/<filename>
+```
+
+If `public_media_base_url` is blank, uploads fall back to the request protocol and host. Test a generated `media_url` in the browser; it should show the raw image and return `image/jpeg` or `image/png`, not HTML.
+
 ```json
 {
   "batch_id": "B-1777200000000",
