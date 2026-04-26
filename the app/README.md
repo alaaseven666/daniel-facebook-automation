@@ -6,6 +6,8 @@ The Express app is the source of truth for queue creation and status. n8n should
 
 The frontend submits batches to `POST /api/queue`. The app stores one queue row per selected page per post, then forwards one payload to the configured `n8n_webhook_url`.
 
+A batch may contain 1 to 6 posts. The UI always displays six possible slots, but empty slots are ignored. `slot_number` remains the visible slot number, so filling only Slot 2 and Slot 4 sends jobs with `slot_number` 2 and 4.
+
 ```json
 {
   "batch_id": "B-1777200000000",

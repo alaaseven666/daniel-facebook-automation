@@ -215,10 +215,10 @@
     <h1>Optimizers Automation</h1>
     
     <nav>
-        <button class="nav-btn active" onclick="switchTab('queue-builder')">Queue Builder</button>
-        <button class="nav-btn" onclick="switchTab('queue-monitor')">Queue Monitor</button>
-        <button class="nav-btn" onclick="switchTab('page-manager')">Page Manager</button>
-        <button class="nav-btn" onclick="switchTab('settings')">Settings</button>
+        <button class="nav-btn active" data-tab="queue-builder" onclick="switchTab('queue-builder', event)">Queue Builder</button>
+        <button class="nav-btn" data-tab="queue-monitor" onclick="switchTab('queue-monitor', event)">Queue Monitor</button>
+        <button class="nav-btn" data-tab="page-manager" onclick="switchTab('page-manager', event)">Page Manager</button>
+        <button class="nav-btn" data-tab="settings" onclick="switchTab('settings', event)">Settings</button>
     </nav>
 
     <!-- SCREEN 1: Queue Builder -->
@@ -251,7 +251,7 @@
             <!-- 6 Slots injected by JS -->
             <div id="slots-container"></div>
             
-            <button type="submit" class="btn" style="width: 100%; margin-top: 1rem; padding: 1rem; font-size: 1.2rem;">Submit Daily Queue to n8n</button>
+            <button type="submit" class="btn" style="width: 100%; margin-top: 1rem; padding: 1rem; font-size: 1.2rem;">Submit Scheduled Posts to n8n</button>
         </form>
     </section>
 
@@ -373,12 +373,13 @@
     });
 
     // --- Navigation ---
-    function switchTab(tabId) {
+    function switchTab(tabId, event) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         
         document.getElementById(tabId).classList.add('active');
-        event.target.classList.add('active');
+        const navButton = event?.target?.closest?.('.nav-btn') || document.querySelector(`.nav-btn[data-tab="${tabId}"]`);
+        if (navButton) navButton.classList.add('active');
 
         if (tabId === 'queue-monitor') loadQueueData();
     }
@@ -393,7 +394,16 @@
     // --- API Helpers ---
     async function apiFetch(url, options = {}) {
         const res = await fetch(url, options);
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+            const text = await res.text();
+            try {
+                const parsed = JSON.parse(text);
+                throw new Error(parsed.error || parsed.message || text);
+            } catch (parseError) {
+                if (parseError instanceof SyntaxError) throw new Error(text);
+                throw parseError;
+            }
+        }
         return res.json();
     }
 
@@ -413,8 +423,8 @@
         } catch (e) { console.error('Failed to load settings', e); }
     }
 
-    document.getElementById('settings-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
+    document.getElementById('settings-form').addEventListener('submit', async (event) => {
+        if (event) event.preventDefault();
         const payload = {
             n8n_webhook_url: document.getElementById('set-webhook-url').value,
             n8n_status_callback_url: document.getElementById('set-callback-url').value,
@@ -509,7 +519,7 @@
                         </div>
                         <div class="form-group">
                             <label>Media File</label>
-                            <input type="file" id="file-${i}" accept="image/jpeg, image/png, video/mp4, video/quicktime" required>
+                            <input type="file" id="file-${i}" accept="image/jpeg, image/png, video/mp4, video/quicktime">
                         </div>
                         <div class="form-group">
                             <label>Comment Delay (sec)</label>
@@ -545,8 +555,10 @@
         }
     }
 
-    document.getElementById('queue-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
+    document.getElementById('queue-form').addEventListener('submit', submitQueue);
+
+    async function submitQueue(event) {
+        if (event) event.preventDefault();
         
         // 1. Get selected pages
         const selectedPageIds = Array.from(document.querySelectorAll('#qb-page-list input:checked')).map(cb => cb.value);
@@ -566,7 +578,13 @@
             
             for (let i = 1; i <= 6; i++) {
                 const fileInput = document.getElementById(`file-${i}`);
-                if (!fileInput.files[0]) throw new Error(`Missing file for Slot ${i}`);
+                const caption = document.getElementById(`caption-${i}`).value.trim();
+                const firstComment = document.getElementById(`comment-${i}`).value.trim();
+                const hasFile = Boolean(fileInput.files[0]);
+                const isActive = hasFile || caption !== '' || firstComment !== '';
+
+                if (!isActive) continue;
+                if (!hasFile) throw new Error(`Slot ${i} is active. Add a media file or clear the slot.`);
 
                 const formData = new FormData();
                 formData.append('media_file', fileInput.files[0]);
@@ -583,11 +601,15 @@
                     content_type: document.getElementById(`type-${i}`).value,
                     scheduled_time: scheduledDateTime,
                     media_url: url,
-                    caption: document.getElementById(`caption-${i}`).value,
-                    first_comment: document.getElementById(`comment-${i}`).value,
+                    caption: caption,
+                    first_comment: firstComment,
                     comment_delay_seconds: parseInt(document.getElementById(`delay-${i}`).value),
                     pages: pageObjs
                 });
+            }
+
+            if (posts.length === 0) {
+                throw new Error('Add at least one post before submitting.');
             }
 
             const payload = {
@@ -599,20 +621,20 @@
 
             // 3. Submit to Queue API
             showToast('Submitting queue...');
-            await apiFetch('/api/queue', {
+            const result = await apiFetch('/api/queue', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
-            showToast('Queue Submitted Successfully!');
+            showToast(`${posts.length} post${posts.length === 1 ? '' : 's'} submitted. ${result.queued || 0} page job${(result.queued || 0) === 1 ? '' : 's'} queued.`);
             document.getElementById('queue-form').reset();
             switchTab('queue-monitor');
 
         } catch (err) {
             alert(err.message);
         }
-    });
+    }
 
     // --- Queue Monitor ---
     async function loadQueueData() {

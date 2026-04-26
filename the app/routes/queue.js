@@ -101,6 +101,9 @@ router.post('/', async (req, res) => {
                 hint: 'n8n should call /api/queue/status, not /api/queue. /api/queue is only for app-created batches.'
             });
         }
+        if (posts.length < 1 || posts.length > 6) {
+            return res.status(400).json({ error: 'Expected 1 to 6 posts per batch.' });
+        }
 
         const batchTimezone = timezone || DEFAULT_TIMEZONE;
         const itemsToInsert = [];

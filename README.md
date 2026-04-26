@@ -36,6 +36,8 @@ The app sends:
 }
 ```
 
+n8n receives one job per selected page per filled slot. A batch can contain 1 to 6 posts; empty UI slots are ignored, and `slot_number` stays tied to the visible slot number.
+
 n8n must not call `POST /api/queue`. It reports execution results to `POST /api/queue/status`.
 
 ## n8n Cloud Starter Setup
