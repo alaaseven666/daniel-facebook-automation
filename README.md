@@ -77,7 +77,7 @@ After importing `the n8n workflows blueprint/the publisher.json`, configure:
 
 - `Config` Set node: replace `REPLACE_WITH_PUBLIC_APP_URL` with the public base URL for the Express app, for example `https://your-app.example.com`.
 - `Webhook Secret` credential: header auth for the app-to-n8n publisher webhook.
-- `Local App API` credential: header auth for app status callbacks, if your Express app or tunnel requires it.
+- App status callbacks are set to no authentication for local testing. Add auth to the `Notify App:*` nodes later if your public app endpoint requires it.
 - `Meta Page Access Token (test page)` credential: HTTP Header Auth credential for one test page.
 
 For the first test, use one page only. In n8n, create the `Meta Page Access Token (test page)` HTTP Header Auth credential with:
@@ -90,6 +90,8 @@ Value: Bearer REPLACE_WITH_TEST_PAGE_ACCESS_TOKEN
 Do not put page access tokens in the frontend payload or in workflow JSON.
 
 The Page Sync blueprint also uses `REPLACE_WITH_PUBLIC_APP_URL/api/pages`; replace that placeholder before testing page sync.
+
+For local/ngrok testing, the publisher workflow downloads `job.media_url` in n8n first and uploads the binary file to Meta. This avoids relying on Meta fetching ngrok-hosted media URLs directly. The `Download Media` node sends `ngrok-skip-browser-warning: true` and stores the file as binary property `media_file`; `Publish Photo` sends that binary as multipart `source`.
 
 ## Future Multi-Page Token Lookup
 

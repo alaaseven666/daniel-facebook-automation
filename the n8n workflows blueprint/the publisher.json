@@ -206,19 +206,22 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v25.0/{{ $json.page_id }}/photos",
+        "url": "=https://graph.facebook.com/v25.0/{{ $('Split In Batches').item.json.page_id }}/photos",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
+        "contentType": "multipart-form-data",
         "bodyParameters": {
           "parameters": [
             {
-              "name": "url",
-              "value": "={{ $json.media_url }}"
+              "parameterType": "formBinaryData",
+              "name": "source",
+              "inputDataFieldName": "media_file"
             },
             {
+              "parameterType": "formData",
               "name": "caption",
-              "value": "={{ $json.caption }}"
+              "value": "={{ $('Split In Batches').item.json.caption }}"
             }
           ]
         },
@@ -229,7 +232,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        780,
+        1000,
         -160
       ],
       "credentials": {
@@ -255,7 +258,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        1000,
+        1220,
         -160
       ]
     },
@@ -263,8 +266,6 @@
       "parameters": {
         "method": "POST",
         "url": "={{ $('Split In Batches').item.json.callback_url }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -289,22 +290,15 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1220,
+        1440,
         -300
       ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "name": "Local App API"
-        }
-      },
       "continueOnFail": true
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{ $('Split In Batches').item.json.callback_url }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -333,14 +327,9 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1220,
+        1440,
         -120
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "name": "Local App API"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -358,7 +347,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        1440,
+        1660,
         -120
       ]
     },
@@ -372,7 +361,7 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
       "position": [
-        1660,
+        1880,
         -220
       ],
       "webhookId": "wait-comment-delay"
@@ -399,7 +388,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1880,
+        2100,
         -220
       ],
       "credentials": {
@@ -425,7 +414,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        2100,
+        2320,
         -220
       ]
     },
@@ -433,8 +422,6 @@
       "parameters": {
         "method": "POST",
         "url": "={{ $('Split In Batches').item.json.callback_url }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -459,22 +446,15 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        2320,
+        2540,
         -340
       ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "name": "Local App API"
-        }
-      },
       "continueOnFail": true
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{ $('Split In Batches').item.json.callback_url }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -499,14 +479,9 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        2320,
+        2540,
         -160
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "name": "Local App API"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -525,8 +500,6 @@
       "parameters": {
         "method": "POST",
         "url": "={{ $('Split In Batches').item.json.callback_url }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -554,11 +527,6 @@
         1000,
         100
       ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "name": "Local App API"
-        }
-      },
       "continueOnFail": true
     },
     {
@@ -571,7 +539,7 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
       "position": [
-        2540,
+        2760,
         -40
       ],
       "webhookId": "inter-page-delay"
@@ -601,6 +569,37 @@
         720,
         280
       ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.media_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "media_file"
+            }
+          }
+        }
+      },
+      "id": "download-media",
+      "name": "Download Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        780,
+        -160
+      ],
+      "continueOnFail": true
     }
   ],
   "pinData": {},
@@ -715,7 +714,7 @@
       "main": [
         [
           {
-            "node": "Publish Photo",
+            "node": "Download Media",
             "type": "main",
             "index": 0
           }
@@ -887,6 +886,17 @@
         [
           {
             "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Media": {
+      "main": [
+        [
+          {
+            "node": "Publish Photo",
             "type": "main",
             "index": 0
           }
