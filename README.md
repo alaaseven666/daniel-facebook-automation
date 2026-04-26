@@ -38,6 +38,18 @@ The app sends:
 
 n8n receives one job per selected page per filled slot. A batch can contain 1 to 6 posts; empty UI slots are ignored, and `slot_number` stays tied to the visible slot number.
 
+n8n responds immediately after validating the publisher webhook payload:
+
+```json
+{
+  "accepted": true,
+  "batch_id": "...",
+  "jobs_received": 1
+}
+```
+
+After that response, the workflow continues asynchronously: it splits jobs, waits until `scheduled_time`, publishes, posts comments, and sends status updates to `/api/queue/status`.
+
 n8n must not call `POST /api/queue`. It reports execution results to `POST /api/queue/status`.
 
 ## n8n Cloud Starter Setup

@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Contract\nReceives the Express app payload: `{ batch_id, posting_date, timezone, callback_url, jobs[] }`.\n\nThis workflow is an executor only. It must not create queue rows and must never call `POST /api/queue`."
+        "content": "## Contract\nReceives the Express app payload: `{ batch_id, posting_date, timezone, callback_url, jobs[] }`.\n\nThis workflow is an executor only. It must not create queue rows and must never call `POST /api/queue`.\n\nThe webhook responds immediately after validation, before splitting jobs, waiting, publishing, or commenting."
       },
       "id": "note-contract",
       "name": "Contract Note",
@@ -111,7 +111,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\n  \"success\": true,\n  \"batch_id\": \"{{ $json.batch_id }}\",\n  \"accepted_jobs\": {{ $json.job_count }},\n  \"message\": \"Jobs accepted by n8n executor. Status updates will be sent to the app callback.\"\n}",
+        "responseBody": "={\n  \"accepted\": true,\n  \"batch_id\": \"{{ $json.batch_id }}\",\n  \"jobs_received\": {{ $json.job_count }}\n}",
         "options": {}
       },
       "id": "respond-accepted",
@@ -639,7 +639,13 @@
             "node": "Respond: Jobs Accepted",
             "type": "main",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "Respond: Jobs Accepted": {
+      "main": [
+        [
           {
             "node": "Split payload.jobs",
             "type": "main",
