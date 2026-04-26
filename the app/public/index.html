@@ -505,7 +505,6 @@
                             <select id="type-${i}">
                                 <option value="photo">Photo</option>
                                 <option value="reel">Reel</option>
-                                <option value="story">Story</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -555,7 +554,7 @@
 
         const pageObjs = selectedPageIds.map(id => {
             const p = appPages.find(page => page.page_id === id);
-            return { page_id: p.page_id, access_token: p.access_token };
+            return { page_id: p.page_id, page_name: p.page_name };
         });
 
         const date = document.getElementById('qb-date').value;
@@ -577,10 +576,10 @@
                 const { url } = await uploadRes.json();
 
                 const timeStr = document.getElementById(`slot-${i}`).dataset.time;
-                const scheduledDateTime = `${date}T${timeStr}:00+00:00`; // Adjust timezone in production
+                const scheduledDateTime = `${date}T${timeStr}:00`;
 
                 posts.push({
-                    slot: i,
+                    slot_number: i,
                     content_type: document.getElementById(`type-${i}`).value,
                     scheduled_time: scheduledDateTime,
                     media_url: url,
@@ -594,8 +593,8 @@
             const payload = {
                 batch_id: `B-${Date.now()}`,
                 posting_date: date,
+                timezone: appSettings.default_timezone || 'Africa/Cairo',
                 posts: posts,
-                stories: [] // Implement stories logic separately if needed
             };
 
             // 3. Submit to Queue API

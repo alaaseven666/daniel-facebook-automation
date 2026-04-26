@@ -79,7 +79,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://stride-plaything-wasabi.ngrok-free.dev/api/pages",
+        "url": "={{ $env.APP_BASE_URL.replace(/\\/$/, '') + '/api/pages' }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,

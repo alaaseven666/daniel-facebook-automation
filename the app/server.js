@@ -64,7 +64,8 @@ app.listen(PORT, () => {
         'n8n_status_callback_url': '',
         'public_media_base_url': `http://localhost:${PORT}/media`,
         'default_comment_delay': '60',
-        'default_first_post_time': '15:00'
+        'default_first_post_time': '15:00',
+        'default_timezone': process.env.DEFAULT_TIMEZONE || 'Africa/Cairo'
     };
     
     for (const [key, value] of Object.entries(defaults)) {

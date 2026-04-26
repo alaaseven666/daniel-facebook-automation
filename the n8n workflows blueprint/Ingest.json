@@ -1,6 +1,19 @@
 {
-  "name": "Ingest",
+  "name": "Ingest (deprecated - app owns queue)",
   "nodes": [
+    {
+      "parameters": {
+        "content": "## Deprecated\nThe Express app now creates queue rows and sends canonical jobs to the publisher webhook.\n\nDo not use this workflow to forward data into `POST /api/queue`; that would recreate the old duplicate-queue loop."
+      },
+      "id": "deprecated-note",
+      "name": "Deprecated Contract Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        300,
+        -260
+      ]
+    },
     {
       "parameters": {
         "httpMethod": "POST",
@@ -9,184 +22,44 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "ac239628-f48d-4588-b585-2169c92b4b47",
-      "name": "Webhook",
+      "id": "legacy-webhook",
+      "name": "Legacy Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        416,
-        -48
+        320,
+        -40
       ],
-      "webhookId": "bd5685fb-761b-4e8f-b560-363a5494bf91",
+      "webhookId": "fb-ingest-deprecated",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Mfn98s0Q0kBOsrFe",
           "name": "Webhook Secret"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body;\n\nif (!body.batch_id) throw new Error('Missing batch_id');\nif (!body.posting_date) throw new Error('Missing posting_date');\nif (!Array.isArray(body.posts) || body.posts.length === 0) {\n  throw new Error(`Expected at least 1 post, got ${body.posts?.length ?? 0}`);\n}\n\nfor (const post of body.posts) {\n  if (!post.slot) throw new Error(`Post missing slot number`);\n  if (!post.media_url) throw new Error(`Slot ${post.slot}: missing media_url`);\n  if (!post.caption) throw new Error(`Slot ${post.slot}: missing caption`);\n  if (!post.first_comment) throw new Error(`Slot ${post.slot}: missing first_comment`);\n  if (!Array.isArray(post.pages) || post.pages.length === 0) {\n    throw new Error(`Slot ${post.slot}: pages array is empty`);\n  }\n}\n\nreturn $input.all();"
-      },
-      "id": "8d75b4d3-9b22-4e72-96ad-35e76d23482b",
-      "name": "Validate Input",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        640,
-        -48
-      ],
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "jsCode": "const workflowStaticData = $getWorkflowStaticData('global');\nconst body = $input.first().json.body;\n\nif (!workflowStaticData.queue) {\n  workflowStaticData.queue = {};\n}\n\nworkflowStaticData.queue[body.batch_id] = {\n  batch_id: body.batch_id,\n  posting_date: body.posting_date,\n  posts: body.posts,\n  stories: body.stories || [],\n  ingested_at: new Date().toISOString(),\n  status: 'pending'\n};\n\nconst totalRows = body.posts.reduce((sum, p) => sum + p.pages.length, 0);\n\nreturn [{ json: { success: true, batch_id: body.batch_id, queued: totalRows } }];"
-      },
-      "id": "eb60db1e-e6d5-4268-8f0a-95da7010355a",
-      "name": "Store Batch in Static Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1088,
-        16
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://stride-plaything-wasabi.ngrok-free.dev/api/queue",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ $('Webhook').item.json.body }}",
-        "options": {}
-      },
-      "id": "cb7fc631-1b55-403e-afbd-9066ad077a3c",
-      "name": "Forward to Local App DB",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        1312,
-        16
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "L1ludV2RSLyhJISr",
-          "name": "Local App API"
-        }
-      }
-    },
-    {
-      "parameters": {
         "respondWith": "json",
-        "responseBody": "={\n  \"success\": true,\n  \"batch_id\": \"{{ $('Store Batch in Static Data').item.json.batch_id }}\",\n  \"queued\": \"{{ $('Store Batch in Static Data').item.json.queued }}\",\n  \"message\": \"Batch accepted. Publisher will run on schedule.\"\n}",
+        "responseBody": "={\n  \"success\": false,\n  \"error\": \"This ingest workflow is deprecated. Configure the Express app n8n_webhook_url to the publisher webhook path /webhook/fb-publisher. n8n must not call POST /api/queue.\"\n}",
         "options": {}
       },
-      "id": "3f7b99a3-6430-4ce7-80ee-75bf9fde8603",
-      "name": "Respond to Webhook (Success)",
+      "id": "respond-deprecated",
+      "name": "Respond: Deprecated",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        1536,
-        16
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={\n  \"success\": false,\n  \"error\": \"{{ $input.first().json.error.message }}\"\n}",
-        "options": {}
-      },
-      "id": "8ceaea0a-739e-460c-8e74-3022ca1f264a",
-      "name": "Respond to Webhook (Error)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [
-        1152,
-        -304
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.error !== undefined }}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "id": "36f71364-6831-425c-9642-ad84300b24f9",
-      "name": "Check Validation Error",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        864,
-        -48
+        560,
+        -40
       ]
     }
   ],
   "pinData": {},
   "connections": {
-    "Webhook": {
+    "Legacy Webhook": {
       "main": [
         [
           {
-            "node": "Validate Input",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validate Input": {
-      "main": [
-        [
-          {
-            "node": "Check Validation Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check Validation Error": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook (Error)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Store Batch in Static Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Store Batch in Static Data": {
-      "main": [
-        [
-          {
-            "node": "Forward to Local App DB",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Forward to Local App DB": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook (Success)",
+            "node": "Respond: Deprecated",
             "type": "main",
             "index": 0
           }
@@ -199,11 +72,9 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "637af70e-c52b-483f-a022-c162cda11457",
+  "versionId": "deprecated-app-owns-queue",
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "5b782ab6f6f5bd6f3de9d9c2afbe34bd8276ba925ee23797bfdbc66d5610d446"
+    "templateCredsSetupCompleted": false
   },
-  "id": "F5YmyFp7iroRk6ed",
   "tags": []
 }

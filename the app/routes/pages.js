@@ -5,7 +5,7 @@ const { dbHelpers } = require("../db");
 // GET /api/pages - Fetch all synced pages for the frontend
 router.get("/", (req, res) => {
   try {
-    const pages = dbHelpers.getAllPages();
+    const pages = dbHelpers.getAllPagesPublic();
     res.json(pages);
   } catch (error) {
     console.error("Error fetching pages:", error);

@@ -3,70 +3,115 @@
   "nodes": [
     {
       "parameters": {
-        "jsCode": "const hour = new Date().getHours();\n\nconst slotMap = {\n  14: 1,\n  15: 2,\n  16: 3,\n  17: 4,\n  18: 5,\n  19: 6,\n};\n\nconst slotNumber = slotMap[hour] || 1; // Default to 1 for testing if triggered manually\n\nconst today = new Date();\ntoday.setHours(hour + 1, 0, 0, 0);\nconst scheduledUnixTime = Math.floor(today.getTime() / 1000);\n\nreturn [{ json: { slot_number: slotNumber, scheduled_unix_time: scheduledUnixTime } }];"
+        "content": "## Contract\nReceives the Express app payload: `{ batch_id, posting_date, timezone, callback_url, jobs[] }`.\n\nThis workflow is an executor only. It must not create queue rows and must never call `POST /api/queue`."
       },
-      "id": "e9908a73-84d2-4481-8eac-ac01c8aba770",
-      "name": "Determine Current Slot",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "note-contract",
+      "name": "Contract Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
       "position": [
-        -1136,
-        208
+        -1240,
+        -360
       ]
     },
     {
       "parameters": {
-        "url": "https://stride-plaything-wasabi.ngrok-free.dev/api/queue",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "slot",
-              "value": "={{ $json.slot_number }}"
-            },
-            {
-              "name": "status",
-              "value": "pending"
-            }
-          ]
-        },
+        "httpMethod": "POST",
+        "path": "fb-publisher",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
         "options": {}
       },
-      "id": "66293f11-0877-4fe3-9410-3d7cbd6ce283",
-      "name": "Fetch Pending Posts",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
+      "id": "webhook-app-jobs",
+      "name": "Webhook: App Jobs",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
       "position": [
-        -928,
-        208
+        -1240,
+        -40
       ],
+      "webhookId": "fb-publisher-app-jobs",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Mfn98s0Q0kBOsrFe",
           "name": "Webhook Secret"
         }
       }
     },
     {
       "parameters": {
+        "jsCode": "const incoming = $input.first().json;\nconst body = incoming.body || incoming;\n\nif (!body.batch_id) throw new Error('Missing batch_id');\nif (!body.posting_date) throw new Error('Missing posting_date');\nif (!Array.isArray(body.jobs) || body.jobs.length === 0) {\n  throw new Error('Expected payload.jobs to contain at least one job');\n}\n\nconst appBaseUrl = body.app_base_url || $env.APP_BASE_URL || '';\nconst callbackPath = body.callback_url || '/api/queue/status';\nconst callbackUrl = /^https?:\\/\\//.test(callbackPath)\n  ? callbackPath\n  : `${appBaseUrl.replace(/\\/$/, '')}${callbackPath.startsWith('/') ? callbackPath : `/${callbackPath}`}`;\n\nif (!/^https?:\\/\\//.test(callbackUrl)) {\n  throw new Error('callback_url is relative, so APP_BASE_URL must be configured in n8n');\n}\n\nfor (const job of body.jobs) {\n  const label = `queue_id=${job.queue_id ?? 'missing'}`;\n  if (!job.queue_id) throw new Error(`${label}: missing queue_id`);\n  if (!job.page_id) throw new Error(`${label}: missing page_id`);\n  if (!job.content_type) throw new Error(`${label}: missing content_type`);\n  if (!['photo', 'reel'].includes(job.content_type)) throw new Error(`${label}: unsupported content_type ${job.content_type}`);\n  if (!job.media_url) throw new Error(`${label}: missing media_url`);\n  if (!job.scheduled_time) throw new Error(`${label}: missing scheduled_time`);\n}\n\nreturn [{\n  json: {\n    success: true,\n    batch_id: body.batch_id,\n    posting_date: body.posting_date,\n    timezone: body.timezone || 'Africa/Cairo',\n    callback_url: callbackUrl,\n    job_count: body.jobs.length,\n    jobs: body.jobs\n  }\n}];"
+      },
+      "id": "validate-batch",
+      "name": "Validate Batch Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1020,
+        -40
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
         "conditions": {
           "boolean": [
             {
-              "value1": "={{ $json.length > 0 }}",
+              "value1": "={{ $json.error !== undefined }}",
               "value2": true
             }
           ]
         }
       },
-      "id": "9d644388-468f-4264-8d62-5c2920e10939",
-      "name": "Check Empty",
+      "id": "check-validation-error",
+      "name": "Check Validation Error",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        -704,
-        208
+        -800,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"error\": \"{{ $json.error.message }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-invalid",
+      "name": "Respond: Invalid Payload",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"batch_id\": \"{{ $json.batch_id }}\",\n  \"accepted_jobs\": {{ $json.job_count }},\n  \"message\": \"Jobs accepted by n8n executor. Status updates will be sent to the app callback.\"\n}",
+        "options": {}
+      },
+      "id": "respond-accepted",
+      "name": "Respond: Jobs Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const batch = $input.first().json;\nreturn batch.jobs.map(job => ({\n  json: {\n    ...job,\n    batch_id: job.batch_id || batch.batch_id,\n    timezone: batch.timezone,\n    callback_url: batch.callback_url\n  }\n}));"
+      },
+      "id": "split-jobs",
+      "name": "Split payload.jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        -40
       ]
     },
     {
@@ -74,14 +119,103 @@
         "batchSize": 1,
         "options": {}
       },
-      "id": "27cfbaa9-4c38-4847-8976-120af65e3fbf",
+      "id": "split-in-batches",
       "name": "Split In Batches",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 2,
       "position": [
-        -480,
-        208
+        -340,
+        -40
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const job = $json;\nconst staticData = $getWorkflowStaticData('global');\nconst staticTokenMap = staticData.page_access_tokens || {};\nlet envTokenMap = {};\n\nif ($env.FB_PAGE_ACCESS_TOKENS) {\n  try {\n    envTokenMap = JSON.parse($env.FB_PAGE_ACCESS_TOKENS);\n  } catch (error) {\n    throw new Error(`FB_PAGE_ACCESS_TOKENS is not valid JSON: ${error.message}`);\n  }\n}\n\nconst token = staticTokenMap[job.page_id] || envTokenMap[job.page_id] || $env[`FB_PAGE_TOKEN_${job.page_id}`];\nif (!token) {\n  throw new Error(`No n8n-side page access token configured for page_id ${job.page_id}`);\n}\n\nreturn [{ json: { ...job, page_access_token: token } }];"
+      },
+      "id": "resolve-token",
+      "name": "Resolve Page Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        -40
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-token-error",
+      "name": "Check Token Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        100,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Split In Batches').item.json.callback_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "queue_id",
+              "value": "={{ $('Split In Batches').item.json.queue_id }}"
+            },
+            {
+              "name": "status",
+              "value": "error"
+            },
+            {
+              "name": "error_message",
+              "value": "={{ $json.error.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notify-token-error",
+      "name": "Notify App: Token Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        320,
+        -220
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Local App API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $json.scheduled_time }}"
+      },
+      "id": "wait-until-scheduled",
+      "name": "Wait Until scheduled_time",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        320,
+        -40
+      ],
+      "webhookId": "wait-until-scheduled-time"
     },
     {
       "parameters": {
@@ -95,29 +229,23 @@
             {
               "value2": "reel",
               "output": 1
-            },
-            {
-              "value2": "story",
-              "output": 2
             }
           ]
         }
       },
-      "id": "e4a0cd3c-a06d-47a5-bdc1-9aa6cf063f6a",
+      "id": "route-content-type",
       "name": "Route by Content Type",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 1,
       "position": [
-        -256,
-        208
+        540,
+        -40
       ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "=https://graph.facebook.com/v25.0/{{ $json.page_id }}/photos",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -130,37 +258,47 @@
               "value": "={{ $json.caption }}"
             },
             {
-              "name": "published",
-              "value": "false"
-            },
-            {
-              "name": "scheduled_publish_time",
-              "value": "={{ $('Determine Current Slot').item.json.scheduled_unix_time }}"
+              "name": "access_token",
+              "value": "={{ $json.page_access_token }}"
             }
           ]
         },
         "options": {}
       },
-      "id": "a5b73582-91a4-41af-adcd-5ee233217247",
-      "name": "Upload Photo to Page",
+      "id": "publish-photo",
+      "name": "Publish Photo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        0,
-        0
+        780,
+        -160
       ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "R4tINO3TUk9HsmPP",
-          "name": "Meta API"
-        }
-      },
       "continueOnFail": true
     },
     {
       "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-publish-error",
+      "name": "Check Publish Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        -160
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "https://stride-plaything-wasabi.ngrok-free.dev/api/queue/status",
+        "url": "={{ $('Split In Batches').item.json.callback_url }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -168,7 +306,47 @@
           "parameters": [
             {
               "name": "queue_id",
-              "value": "={{ $('Split In Batches').item.json.id }}"
+              "value": "={{ $('Split In Batches').item.json.queue_id }}"
+            },
+            {
+              "name": "status",
+              "value": "error"
+            },
+            {
+              "name": "error_message",
+              "value": "={{ $json.error.message || JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notify-publish-error",
+      "name": "Notify App: Publish Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1220,
+        -300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Local App API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Split In Batches').item.json.callback_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "queue_id",
+              "value": "={{ $('Split In Batches').item.json.queue_id }}"
             },
             {
               "name": "status",
@@ -176,150 +354,336 @@
             },
             {
               "name": "fb_post_id",
-              "value": "={{ $json.id }}"
+              "value": "={{ $json.id || $json.post_id }}"
+            },
+            {
+              "name": "error_message",
+              "value": "={{ null }}"
             }
           ]
         },
         "options": {}
       },
-      "id": "b3718109-d264-4fb3-84ef-925e26bc33cb",
+      "id": "notify-published",
       "name": "Notify App: Published",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        224,
-        0
+        1220,
+        -120
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Local App API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('Split In Batches').item.json.first_comment || '' }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "check-first-comment",
+      "name": "Check First Comment",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Number($('Split In Batches').item.json.comment_delay_seconds || 0) }}",
+        "unit": "seconds"
+      },
+      "id": "wait-comment-delay",
+      "name": "Wait comment_delay_seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1660,
+        -220
+      ],
+      "webhookId": "wait-comment-delay"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v25.0/{{ $('Publish Photo').item.json.id || $('Publish Photo').item.json.post_id }}/comments",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ $('Split In Batches').item.json.first_comment }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $('Resolve Page Token').item.json.page_access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "post-first-comment",
+      "name": "Post First Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1880,
+        -220
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-comment-error",
+      "name": "Check Comment Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2100,
+        -220
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://neamatalla.app.n8n.cloud/webhook/fb-comment",
+        "url": "={{ $('Split In Batches').item.json.callback_url }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
-              "name": "post_id",
-              "value": "={{ $('Upload Photo to Page').item.json.id }}"
+              "name": "queue_id",
+              "value": "={{ $('Split In Batches').item.json.queue_id }}"
             },
             {
-              "name": "page_id",
-              "value": "={{ $('Split In Batches').item.json.page_id }}"
+              "name": "comment_status",
+              "value": "error"
             },
             {
-              "name": "access_token",
-              "value": "={{ $('Split In Batches').item.json.access_token }}"
-            },
-            {
-              "name": "comment_text",
-              "value": "={{ $('Split In Batches').item.json.first_comment }}"
-            },
-            {
-              "name": "delay_seconds",
-              "value": "={{ $('Split In Batches').item.json.comment_delay_seconds }}"
+              "name": "error_message",
+              "value": "={{ $json.error.message || JSON.stringify($json) }}"
             }
           ]
         },
         "options": {}
       },
-      "id": "616aeaee-42e5-4f59-b938-98571bb684ff",
-      "name": "Trigger Commenter",
+      "id": "notify-comment-error",
+      "name": "Notify App: Comment Error",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        448,
-        0
+        2320,
+        -340
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Local App API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Split In Batches').item.json.callback_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "queue_id",
+              "value": "={{ $('Split In Batches').item.json.queue_id }}"
+            },
+            {
+              "name": "comment_status",
+              "value": "published"
+            },
+            {
+              "name": "error_message",
+              "value": "={{ null }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notify-comment-published",
+      "name": "Notify App: Comment Published",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2320,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Local App API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// TODO: Implement the full Meta Reels upload flow here.\n// Meta Reels usually require a start/upload/finish flow, video processing checks,\n// and a published post/video id to report back to the app.\n// Until implemented, mark the queue row as an executor error so the dashboard is honest.\nreturn [{ json: { ...$json, reel_error: 'Reel publishing branch is not implemented in this blueprint yet.' } }];"
+      },
+      "id": "reel-placeholder",
+      "name": "Reel TODO Placeholder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        100
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Split In Batches').item.json.callback_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "queue_id",
+              "value": "={{ $json.queue_id }}"
+            },
+            {
+              "name": "status",
+              "value": "error"
+            },
+            {
+              "name": "error_message",
+              "value": "={{ $json.reel_error }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notify-reel-placeholder",
+      "name": "Notify App: Reel TODO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1000,
+        100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Local App API"
+        }
+      },
+      "continueOnFail": true
     },
     {
       "parameters": {
         "amount": 2,
         "unit": "seconds"
       },
-      "id": "a23bc7f0-80a8-45d1-b7e9-b393a2d90b24",
+      "id": "inter-page-delay",
       "name": "Inter-Page Delay",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
       "position": [
-        672,
-        0
+        2540,
+        -40
       ],
-      "webhookId": "13b5ed73-444b-4b17-acf0-ebf9784dbace"
+      "webhookId": "inter-page-delay"
     },
     {
       "parameters": {
-        "content": "## Reel Logic Placeholder\nWill build this out once Photo test is successful."
+        "content": "## Token Source\nDo not accept page tokens from the app payload.\n\nConfigure one of:\n- `FB_PAGE_ACCESS_TOKENS` env var as JSON: `{ \"page_id\": \"token\" }`\n- `FB_PAGE_TOKEN_<page_id>` env vars\n- Workflow static data `page_access_tokens` populated by your own secure token sync flow."
       },
-      "id": "078711f5-0e8f-4752-bbb6-a787e573b703",
-      "name": "Reel Branch",
+      "id": "note-token-source",
+      "name": "Token Source Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        0,
-        208
+        -240,
+        -360
       ]
     },
     {
       "parameters": {
-        "content": "## Story Logic Placeholder\nWill build this out once Photo test is successful."
+        "content": "## Reel TODO\nThe reel branch intentionally reports an error until the Meta Reels upload flow is implemented. Add the start/upload/finish/status-check sequence here, then call the same app status callbacks used by photos."
       },
-      "id": "6fd6c84f-77bf-4416-a205-82084b8a22fd",
-      "name": "Story Branch",
+      "id": "note-reel-todo",
+      "name": "Reel TODO Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        0,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "cronExpression",
-              "expression": "55 14 * * *"
-            }
-          ]
-        }
-      },
-      "id": "a02e16e6-0a42-45b6-8048-8f16b045f173",
-      "name": "Trigger 15:00",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.1,
-      "position": [
-        -1360,
-        208
+        720,
+        280
       ]
     }
   ],
   "pinData": {},
   "connections": {
-    "Determine Current Slot": {
+    "Webhook: App Jobs": {
       "main": [
         [
           {
-            "node": "Fetch Pending Posts",
+            "node": "Validate Batch Contract",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Pending Posts": {
+    "Validate Batch Contract": {
       "main": [
         [
           {
-            "node": "Check Empty",
+            "node": "Check Validation Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Empty": {
+    "Check Validation Error": {
+      "main": [
+        [
+          {
+            "node": "Respond: Invalid Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Jobs Accepted",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split payload.jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split payload.jobs": {
       "main": [
         [
           {
@@ -334,6 +698,57 @@
       "main": [
         [
           {
+            "node": "Resolve Page Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Page Token": {
+      "main": [
+        [
+          {
+            "node": "Check Token Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Token Error": {
+      "main": [
+        [
+          {
+            "node": "Notify App: Token Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait Until scheduled_time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify App: Token Error": {
+      "main": [
+        [
+          {
+            "node": "Inter-Page Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Until scheduled_time": {
+      "main": [
+        [
+          {
             "node": "Route by Content Type",
             "type": "main",
             "index": 0
@@ -345,18 +760,54 @@
       "main": [
         [
           {
-            "node": "Upload Photo to Page",
+            "node": "Publish Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reel TODO Placeholder",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Upload Photo to Page": {
+    "Publish Photo": {
       "main": [
         [
           {
+            "node": "Check Publish Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Publish Error": {
+      "main": [
+        [
+          {
+            "node": "Notify App: Publish Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Notify App: Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify App: Publish Error": {
+      "main": [
+        [
+          {
+            "node": "Inter-Page Delay",
             "type": "main",
             "index": 0
           }
@@ -367,14 +818,105 @@
       "main": [
         [
           {
-            "node": "Trigger Commenter",
+            "node": "Check First Comment",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Trigger Commenter": {
+    "Check First Comment": {
+      "main": [
+        [
+          {
+            "node": "Wait comment_delay_seconds",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Inter-Page Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait comment_delay_seconds": {
+      "main": [
+        [
+          {
+            "node": "Post First Comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post First Comment": {
+      "main": [
+        [
+          {
+            "node": "Check Comment Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Comment Error": {
+      "main": [
+        [
+          {
+            "node": "Notify App: Comment Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify App: Comment Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify App: Comment Error": {
+      "main": [
+        [
+          {
+            "node": "Inter-Page Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify App: Comment Published": {
+      "main": [
+        [
+          {
+            "node": "Inter-Page Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reel TODO Placeholder": {
+      "main": [
+        [
+          {
+            "node": "Notify App: Reel TODO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify App: Reel TODO": {
       "main": [
         [
           {
@@ -395,17 +937,6 @@
           }
         ]
       ]
-    },
-    "Trigger 15:00": {
-      "main": [
-        [
-          {
-            "node": "Determine Current Slot",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
   },
   "active": false,
@@ -413,10 +944,9 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "88ae1c7e-0a24-4730-8918-3104a6a1225f",
+  "versionId": "app-contract-publisher-v2",
   "meta": {
-    "instanceId": "5b782ab6f6f5bd6f3de9d9c2afbe34bd8276ba925ee23797bfdbc66d5610d446"
+    "templateCredsSetupCompleted": false
   },
-  "id": "cSw8HvCj1fY291yb",
   "tags": []
 }
