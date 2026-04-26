@@ -79,7 +79,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.APP_BASE_URL.replace(/\\/$/, '') + '/api/pages' }}",
+        "url": "REPLACE_WITH_PUBLIC_APP_URL/api/pages",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,

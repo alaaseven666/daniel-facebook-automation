@@ -39,14 +39,36 @@
     },
     {
       "parameters": {
-        "jsCode": "const incoming = $input.first().json;\nconst body = incoming.body || incoming;\n\nif (!body.batch_id) throw new Error('Missing batch_id');\nif (!body.posting_date) throw new Error('Missing posting_date');\nif (!Array.isArray(body.jobs) || body.jobs.length === 0) {\n  throw new Error('Expected payload.jobs to contain at least one job');\n}\n\nconst appBaseUrl = body.app_base_url || $env.APP_BASE_URL || '';\nconst callbackPath = body.callback_url || '/api/queue/status';\nconst callbackUrl = /^https?:\\/\\//.test(callbackPath)\n  ? callbackPath\n  : `${appBaseUrl.replace(/\\/$/, '')}${callbackPath.startsWith('/') ? callbackPath : `/${callbackPath}`}`;\n\nif (!/^https?:\\/\\//.test(callbackUrl)) {\n  throw new Error('callback_url is relative, so APP_BASE_URL must be configured in n8n');\n}\n\nfor (const job of body.jobs) {\n  const label = `queue_id=${job.queue_id ?? 'missing'}`;\n  if (!job.queue_id) throw new Error(`${label}: missing queue_id`);\n  if (!job.page_id) throw new Error(`${label}: missing page_id`);\n  if (!job.content_type) throw new Error(`${label}: missing content_type`);\n  if (!['photo', 'reel'].includes(job.content_type)) throw new Error(`${label}: unsupported content_type ${job.content_type}`);\n  if (!job.media_url) throw new Error(`${label}: missing media_url`);\n  if (!job.scheduled_time) throw new Error(`${label}: missing scheduled_time`);\n}\n\nreturn [{\n  json: {\n    success: true,\n    batch_id: body.batch_id,\n    posting_date: body.posting_date,\n    timezone: body.timezone || 'Africa/Cairo',\n    callback_url: callbackUrl,\n    job_count: body.jobs.length,\n    jobs: body.jobs\n  }\n}];"
+        "keepOnlySet": false,
+        "values": {
+          "string": [
+            {
+              "name": "app_base_url",
+              "value": "REPLACE_WITH_PUBLIC_APP_URL"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config-node",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        -1020,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const incoming = $input.first().json;\nconst body = incoming.body || incoming;\nconst appBaseUrl = incoming.app_base_url || 'REPLACE_WITH_PUBLIC_APP_URL';\n\nif (!body.batch_id) throw new Error('Missing batch_id');\nif (!body.posting_date) throw new Error('Missing posting_date');\nif (!Array.isArray(body.jobs) || body.jobs.length === 0) {\n  throw new Error('Expected payload.jobs to contain at least one job');\n}\nif (!appBaseUrl || appBaseUrl === 'REPLACE_WITH_PUBLIC_APP_URL') {\n  throw new Error('Set Config.app_base_url to your public Express app URL before activating this workflow.');\n}\n\nconst callbackPath = body.callback_url || '/api/queue/status';\nconst callbackUrl = /^https?:\\/\\//.test(callbackPath)\n  ? callbackPath\n  : `${appBaseUrl.replace(/\\/$/, '')}${callbackPath.startsWith('/') ? callbackPath : `/${callbackPath}`}`;\n\nfor (const job of body.jobs) {\n  const label = `queue_id=${job.queue_id ?? 'missing'}`;\n  if (!job.queue_id) throw new Error(`${label}: missing queue_id`);\n  if (!job.page_id) throw new Error(`${label}: missing page_id`);\n  if (!job.content_type) throw new Error(`${label}: missing content_type`);\n  if (!['photo', 'reel'].includes(job.content_type)) throw new Error(`${label}: unsupported content_type ${job.content_type}`);\n  if (!job.media_url) throw new Error(`${label}: missing media_url`);\n  if (!job.scheduled_time) throw new Error(`${label}: missing scheduled_time`);\n}\n\nreturn [{\n  json: {\n    success: true,\n    batch_id: body.batch_id,\n    posting_date: body.posting_date,\n    timezone: body.timezone || 'Africa/Cairo',\n    callback_url: callbackUrl,\n    job_count: body.jobs.length,\n    jobs: body.jobs\n  }\n}];"
       },
       "id": "validate-batch",
       "name": "Validate Batch Contract",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1020,
+        -800,
         -40
       ],
       "continueOnFail": true
@@ -67,7 +89,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        -800,
+        -580,
         -40
       ]
     },
@@ -82,7 +104,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        -560,
+        -340,
         -200
       ]
     },
@@ -97,7 +119,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        -560,
+        -340,
         120
       ]
     },
@@ -110,7 +132,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -560,
+        -340,
         -40
       ]
     },
@@ -127,80 +149,6 @@
         -340,
         -40
       ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const job = $json;\nconst staticData = $getWorkflowStaticData('global');\nconst staticTokenMap = staticData.page_access_tokens || {};\nlet envTokenMap = {};\n\nif ($env.FB_PAGE_ACCESS_TOKENS) {\n  try {\n    envTokenMap = JSON.parse($env.FB_PAGE_ACCESS_TOKENS);\n  } catch (error) {\n    throw new Error(`FB_PAGE_ACCESS_TOKENS is not valid JSON: ${error.message}`);\n  }\n}\n\nconst token = staticTokenMap[job.page_id] || envTokenMap[job.page_id] || $env[`FB_PAGE_TOKEN_${job.page_id}`];\nif (!token) {\n  throw new Error(`No n8n-side page access token configured for page_id ${job.page_id}`);\n}\n\nreturn [{ json: { ...job, page_access_token: token } }];"
-      },
-      "id": "resolve-token",
-      "name": "Resolve Page Token",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -120,
-        -40
-      ],
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.error !== undefined }}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "id": "check-token-error",
-      "name": "Check Token Error",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        100,
-        -40
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $('Split In Batches').item.json.callback_url }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "queue_id",
-              "value": "={{ $('Split In Batches').item.json.queue_id }}"
-            },
-            {
-              "name": "status",
-              "value": "error"
-            },
-            {
-              "name": "error_message",
-              "value": "={{ $json.error.message }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "notify-token-error",
-      "name": "Notify App: Token Error",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        320,
-        -220
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "name": "Local App API"
-        }
-      },
-      "continueOnFail": true
     },
     {
       "parameters": {
@@ -246,6 +194,8 @@
       "parameters": {
         "method": "POST",
         "url": "=https://graph.facebook.com/v25.0/{{ $json.page_id }}/photos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -256,10 +206,6 @@
             {
               "name": "caption",
               "value": "={{ $json.caption }}"
-            },
-            {
-              "name": "access_token",
-              "value": "={{ $json.page_access_token }}"
             }
           ]
         },
@@ -273,6 +219,11 @@
         780,
         -160
       ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Meta Page Access Token (test page)"
+        }
+      },
       "continueOnFail": true
     },
     {
@@ -417,16 +368,14 @@
       "parameters": {
         "method": "POST",
         "url": "=https://graph.facebook.com/v25.0/{{ $('Publish Photo').item.json.id || $('Publish Photo').item.json.post_id }}/comments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
               "name": "message",
               "value": "={{ $('Split In Batches').item.json.first_comment }}"
-            },
-            {
-              "name": "access_token",
-              "value": "={{ $('Resolve Page Token').item.json.page_access_token }}"
             }
           ]
         },
@@ -440,6 +389,11 @@
         1880,
         -220
       ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Meta Page Access Token (test page)"
+        }
+      },
       "continueOnFail": true
     },
     {
@@ -611,7 +565,7 @@
     },
     {
       "parameters": {
-        "content": "## Token Source\nDo not accept page tokens from the app payload.\n\nConfigure one of:\n- `FB_PAGE_ACCESS_TOKENS` env var as JSON: `{ \"page_id\": \"token\" }`\n- `FB_PAGE_TOKEN_<page_id>` env vars\n- Workflow static data `page_access_tokens` populated by your own secure token sync flow."
+        "content": "## n8n Cloud Starter Token Setup\nFor Starter plan testing, configure the Meta HTTP Request nodes with a page access token credential manually.\n\nUse one test page first. Create an HTTP Header Auth credential named `Meta Page Access Token (test page)` with an `Authorization: Bearer <PAGE_ACCESS_TOKEN>` header.\n\nTODO for multi-page publishing: replace this single test-page credential with a secure token lookup flow outside frontend payloads."
       },
       "id": "note-token-source",
       "name": "Token Source Note",
@@ -639,6 +593,17 @@
   "pinData": {},
   "connections": {
     "Webhook: App Jobs": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
       "main": [
         [
           {
@@ -698,47 +663,7 @@
       "main": [
         [
           {
-            "node": "Resolve Page Token",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Resolve Page Token": {
-      "main": [
-        [
-          {
-            "node": "Check Token Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check Token Error": {
-      "main": [
-        [
-          {
-            "node": "Notify App: Token Error",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
             "node": "Wait Until scheduled_time",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notify App: Token Error": {
-      "main": [
-        [
-          {
-            "node": "Inter-Page Delay",
             "type": "main",
             "index": 0
           }

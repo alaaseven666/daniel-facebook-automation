@@ -38,15 +38,31 @@ The app sends:
 
 n8n must not call `POST /api/queue`. It reports execution results to `POST /api/queue/status`.
 
-## Required n8n Configuration
+## n8n Cloud Starter Setup
 
-- `APP_BASE_URL`: public base URL for the Express app, used when `callback_url` is relative.
-- `FB_PAGE_ACCESS_TOKENS`: JSON object mapping page ids to page access tokens, for example `{ "123": "token" }`.
-- Optional alternative: one env var per page named `FB_PAGE_TOKEN_<page_id>`.
-- Credential `Webhook Secret`: header auth for the app-to-n8n webhook.
-- Credential `Local App API`: header auth for app status callbacks, if your Express app requires it.
+n8n Cloud Starter cannot use server environment variables or n8n Variables for this setup, so the publisher blueprint includes a workflow-local `Config` Set node.
 
-Do not put page access tokens in the frontend payload.
+After importing `the n8n workflows blueprint/the publisher.json`, configure:
+
+- `Config` Set node: replace `REPLACE_WITH_PUBLIC_APP_URL` with the public base URL for the Express app, for example `https://your-app.example.com`.
+- `Webhook Secret` credential: header auth for the app-to-n8n publisher webhook.
+- `Local App API` credential: header auth for app status callbacks, if your Express app or tunnel requires it.
+- `Meta Page Access Token (test page)` credential: HTTP Header Auth credential for one test page.
+
+For the first test, use one page only. In n8n, create the `Meta Page Access Token (test page)` HTTP Header Auth credential with:
+
+```text
+Name: Authorization
+Value: Bearer REPLACE_WITH_TEST_PAGE_ACCESS_TOKEN
+```
+
+Do not put page access tokens in the frontend payload or in workflow JSON.
+
+The Page Sync blueprint also uses `REPLACE_WITH_PUBLIC_APP_URL/api/pages`; replace that placeholder before testing page sync.
+
+## Future Multi-Page Token Lookup
+
+The current Starter-plan publisher blueprint intentionally does not use `$env`, `$vars`, or JSON token maps. It is prepared for one test page through an n8n credential. For multi-page publishing, add a secure token lookup flow inside n8n, or use a credential strategy appropriate for your n8n plan, while keeping tokens out of the app frontend payload.
 
 ## Meta Permissions
 
